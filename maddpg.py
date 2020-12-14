@@ -22,32 +22,17 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class MaddpgAgent: 
 
-    def __init__(self, agent_count, state_size, action_size_type0, action_size_type1, random_seed):
+    def __init__(self, agent_count, state_size, action_size, random_seed):
 
-
-        
-        
-        self.action_size_type0 = action_size_type0
-        self.action_size_type1 = action_size_type1
+        self.action_size = action_size
         self.state_size = state_size
         self.agent_count = agent_count
-        self.agent_count_by_type = agent_count // 2
-
-        self.max_action_size = max(action_size_type0, action_size_type1)
-
-        self.critic_action_size = self.max_action_size * self.agent_count_by_type
-
-        agents_type0 = [Agent(agent_count, state_size, action_size_type0, max_action_size, random_seed) for _ in range(self.agent_count_by_type / 2) ]
-        agents_type1 = [Agent(agent_count, state_size, action_size_type1, max_action_size, random_seed) for _ in range(self.agent_count_by_type / 2) ]
-        self.agents = []
-        self.agents.extend(agents_type0)
-        self.agents.extend(agents_type1)
+        self.agents = [Agent(agent_count, state_size, action_size, random_seed) for _ in range(agent_count) ]
 
         random.seed(random_seed)
 
         # Noise process
-        self.noise_type0 = OUNoise(action_size_type0, random_seed)
-        self.noise_type1 = OUNoise(action_size_type1, random_seed)
+        self.noise = OUNoise(action_size, random_seed)
         self.exploration = 1.0
 
         # Replay memory
@@ -70,7 +55,7 @@ class MaddpgAgent:
                     experiences = self.memory.sample()
                     self.learn(idx, experiences, GAMMA)
 
-    def act_type0(self, states, add_noise=True):
+    def act(self, states, add_noise=True):
         """Returns actions for given state as per current policy."""
         actions = []
         for idx, state in enumerate(states):
@@ -81,29 +66,7 @@ class MaddpgAgent:
                 action = self.agents[idx].actor_local(state).cpu().data.numpy()
             self.agents[idx].actor_local.train()
             if add_noise:
-                noise = self.exploration * self.noise_type0.sample()
-                action += noise
-                self.exploration *= EXPLORATION_DECAY
-                self.exploration = max(EXPLORATION_MIN, self.exploration)
-            actions.append(action)
-
-        actions = np.array(actions)
-        actions = actions.squeeze()
-        return actions
-
-    def act_type1(self, states, add_noise=True):
-        """Returns actions for given state as per current policy."""
-        actions = []
-        for i, state in enumerate(states):
-            idx = i + self.agent_count_by_type
-            state = torch.from_numpy(state).float().to(device)
-            state = state.unsqueeze(0)
-            self.agents[idx].actor_local.eval()
-            with torch.no_grad():
-                action = self.agents[idx].actor_local(state).cpu().data.numpy()
-            self.agents[idx].actor_local.train()
-            if add_noise:
-                noise = self.exploration * self.noise_type1.sample()
+                noise = self.exploration * self.noise.sample()
                 action += noise
                 self.exploration *= EXPLORATION_DECAY
                 self.exploration = max(EXPLORATION_MIN, self.exploration)
@@ -115,34 +78,31 @@ class MaddpgAgent:
 
     def target_act(self, states):
         """Returns actions for given state as per current policy."""
-        actions = torch.tensor([])
+        actions = torch.zeros((self.agent_count, BATCH_SIZE))
         assert len(states) == self.agent_count
         for idx, state in enumerate(states):
             state = torch.reshape(state, (BATCH_SIZE, self.state_size))
-            action_small = self.agents[idx].actor_target(state)
-            action = action + action_small
-            actions = torch.cat((actions, action))
-        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, self.max_action_size))
+            action = self.agents[idx].actor_target(state)
+            action = torch.argmax(action, 1)
+            actions[idx] = action
+        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, 1))
         actions = actions.permute(1, 0, 2)
-        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * self.max_action_size))
+        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * 1))
         return actions
 
 
     def local_act(self, states):
-        actions = torch.tensor([])
+        actions = torch.zeros((self.agent_count, BATCH_SIZE))
         assert len(states) == self.agent_count
         for idx, state in enumerate(states):
             state = torch.reshape(state, (BATCH_SIZE, self.state_size))
-            action = torch.zeros((BATCH_SIZE, self.max_action_size))
-            action_small = self.agents[idx].actor_local(state)
-            action = action + action_small
-            actions = torch.cat((actions, action))
-        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, self.max_action_size))
+            action = self.agents[idx].actor_local(state)
+            action = torch.argmax(action, 1)
+            actions[idx] = action
+        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, 1))
         actions = actions.permute(1, 0, 2)
-        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * self.max_action_size))
+        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * 1))
         return actions
-
-
 
     def reset(self):
         self.noise.reset()
@@ -165,7 +125,7 @@ class MaddpgAgent:
         
         all_next_states = np.reshape(next_states, (BATCH_SIZE, self.agent_count * self.state_size))
         all_states = np.reshape(states, (BATCH_SIZE, self.agent_count * self.state_size))
-        all_actions = np.reshape(actions, (BATCH_SIZE, self.agent_count * self.max_action_size))
+        all_actions = np.reshape(actions, (BATCH_SIZE, self.agent_count * 1))
 
         next_states = np.swapaxes(next_states, 0, 1)
         states = np.swapaxes(states, 0, 1)
