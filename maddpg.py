@@ -78,30 +78,36 @@ class MaddpgAgent:
 
     def target_act(self, states):
         """Returns actions for given state as per current policy."""
-        actions = torch.zeros((self.agent_count, BATCH_SIZE))
+        actions = torch.tensor([])
         assert len(states) == self.agent_count
         for idx, state in enumerate(states):
             state = torch.reshape(state, (BATCH_SIZE, self.state_size))
             action = self.agents[idx].actor_target(state)
-            action = torch.argmax(action, 1)
-            actions[idx] = action
-        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, 1))
+            max_index = torch.argmax(action, 1)
+            action = torch.zeros((BATCH_SIZE, self.action_size))
+            for i in range(BATCH_SIZE):
+                action[i, max_index[i]] = 1.0
+            actions = torch.cat((actions, action))
+        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, self.action_size))
         actions = actions.permute(1, 0, 2)
-        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * 1))
+        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * self.action_size))
         return actions
 
 
     def local_act(self, states):
-        actions = torch.zeros((self.agent_count, BATCH_SIZE))
+        actions = torch.tensor([])
         assert len(states) == self.agent_count
         for idx, state in enumerate(states):
             state = torch.reshape(state, (BATCH_SIZE, self.state_size))
             action = self.agents[idx].actor_local(state)
-            action = torch.argmax(action, 1)
-            actions[idx] = action
-        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, 1))
+            max_index = torch.argmax(action, 1)
+            action = torch.zeros((BATCH_SIZE, self.action_size))
+            for i in range(BATCH_SIZE):
+                action[i, max_index[i]] = 1.0
+            actions = torch.cat((actions, action))
+        actions = torch.reshape(actions, (self.agent_count, BATCH_SIZE, self.action_size))
         actions = actions.permute(1, 0, 2)
-        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * 1))
+        actions = torch.reshape(actions, (BATCH_SIZE, self.agent_count * self.action_size))
         return actions
 
     def reset(self):
@@ -120,12 +126,9 @@ class MaddpgAgent:
             gamma (float): discount factor
         """
         states, actions, rewards, next_states, dones = experiences
-
-        
-        
         all_next_states = np.reshape(next_states, (BATCH_SIZE, self.agent_count * self.state_size))
         all_states = np.reshape(states, (BATCH_SIZE, self.agent_count * self.state_size))
-        all_actions = np.reshape(actions, (BATCH_SIZE, self.agent_count * 1))
+        all_actions = np.reshape(actions, (BATCH_SIZE, self.agent_count * self.action_size))
 
         next_states = np.swapaxes(next_states, 0, 1)
         states = np.swapaxes(states, 0, 1)
@@ -149,7 +152,7 @@ class MaddpgAgent:
         # Minimize the loss
         self.agents[agent_index].critic_optimizer.zero_grad()
         critic_loss.backward()
-        torch.nn.utils.clip_grad_norm(self.agents[agent_index].critic_local.parameters(), 1)
+        # torch.nn.utils.clip_grad_norm(self.agents[agent_index].critic_local.parameters(), 1)
         self.agents[agent_index].critic_optimizer.step()
 
         # ---------------------------- update actor ---------------------------- #
@@ -164,13 +167,13 @@ class MaddpgAgent:
         # ----------------------- update target networks ----------------------- #
         self.agents[agent_index].soft_update()
 
-    def save(self):
+    def save(self, name):
         for idx, agent in enumerate(self.agents):
-            agent.save("checkpoint" + str(idx))
+            agent.save(name + str(idx))
 
-    def load(self):
+    def load(self, name):
         for idx, agent in enumerate(self.agents):
-            agent.load("checkpoint" + str(idx))
+            agent.load(name + str(idx))
 
 
 class OUNoise:

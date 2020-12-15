@@ -36,8 +36,8 @@ class Agent():
         self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
 
         # Critic Network (w/ Target Network)
-        self.critic_local = Critic(agent_count * state_size, agent_count * 1, random_seed).to(device)
-        self.critic_target = Critic(agent_count * state_size, agent_count * 1, random_seed).to(device)
+        self.critic_local = Critic(agent_count * state_size, agent_count * action_size, random_seed).to(device)
+        self.critic_target = Critic(agent_count * state_size, agent_count * action_size, random_seed).to(device)
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
     
     def soft_update(self):
