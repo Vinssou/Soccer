@@ -66,10 +66,10 @@ class MaddpgAgent:
                 action = self.agents[idx].actor_local(state).cpu().data.numpy()
             self.agents[idx].actor_local.train()
             if add_noise:
-                noise = self.exploration * self.noise.sample()
+                noise = self.noise.sample()
                 action += noise
-                self.exploration *= EXPLORATION_DECAY
-                self.exploration = max(EXPLORATION_MIN, self.exploration)
+                # self.exploration *= EXPLORATION_DECAY
+                # self.exploration = max(EXPLORATION_MIN, self.exploration)
             actions.append(action)
 
         actions = np.array(actions)
