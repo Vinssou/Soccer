@@ -10,10 +10,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 BUFFER_SIZE = 100000    # replay buffer size
-BATCH_SIZE = 128        # minibatch size
+BATCH_SIZE = 256        # minibatch size
 GAMMA = 0.95            # discount factor
 
-EXPLORATION_DECAY = 0.999995
+EXPLORATION_DECAY = 0.9999999
 EXPLORATION_MIN = 0.01
 LEARN_FREQUENCY = 20
 LEARN_COUNT = 10
@@ -66,10 +66,10 @@ class MaddpgAgent:
                 action = self.agents[idx].actor_local(state).cpu().data.numpy()
             self.agents[idx].actor_local.train()
             if add_noise:
-                noise = self.noise.sample()
+                noise = self.exploration * self.noise.sample()
                 action += noise
-                # self.exploration *= EXPLORATION_DECAY
-                # self.exploration = max(EXPLORATION_MIN, self.exploration)
+                self.exploration *= EXPLORATION_DECAY
+                self.exploration = max(EXPLORATION_MIN, self.exploration)
             actions.append(action)
 
         actions = np.array(actions)
